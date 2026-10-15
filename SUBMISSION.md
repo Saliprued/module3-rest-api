@@ -1,11 +1,11 @@
 # Phase 1 submission
 Name: Sandra Perez Rueda
-Course or section:
+Course or section: INEW-2434
 Chosen track: Python FastAPI
 
 
 ## My campus idea
-Explain the idea in one sentence.
+This is a app about ideas suggested by students on a campus.
 
 ## Evidence log
 folder screenshots
