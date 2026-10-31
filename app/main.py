@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.models import Idea, IdeaRequest
 from app.store import IdeaStore
@@ -7,6 +8,16 @@ from app.store import IdeaStore
 def create_app() -> FastAPI:
     app = FastAPI(title="Campus Idea Board")
     store = IdeaStore()  # Fresh store per app; test clients can be isolated.
+
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173"],  # Adjust this to your frontend's origin
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+    )
+
+    store = IdeaStore()
 
     # FastAPI normally uses 422 for validation errors. We supply this handler
     # so both classroom tracks use the same 400 error contract.
