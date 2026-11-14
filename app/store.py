@@ -1,23 +1,69 @@
-from threading import Lock
+import os
+import sqlite3
+from contextlib import closing
+from pathlib import Path
+
+from fastapi import HTTPException
 from app.models import Idea, IdeaRequest
 
+
+def connect():
+    path = Path(os.environ.get("DB_PATH", "data/ideas.db"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def initialize():
+    schema = Path(__file__).with_name("schema.sql").read_text()
+
+    with closing(connect()) as conn:
+        conn.executescript(schema)
+        conn.commit()
+
+
 class IdeaStore:
-    """Provided memory store. A fresh instance contains two seed ideas."""
+    """Stores ideas in SQLite."""
+
     def __init__(self):
-        self._lock = Lock()
-        self._ideas = [
-            Idea(id=1, title="Start a coding club", category="clubs"),
-            Idea(id=2, title="Create a campus garden", category="environment"),
-        ]
-        self._next_id = 3
+        initialize()
 
     def find_all(self) -> list[Idea]:
-        with self._lock:
-            return list(self._ideas)
+        with closing(connect()) as conn:
+            rows = conn.execute(
+                "SELECT id, title, category FROM ideas ORDER BY id"
+            ).fetchall()
+
+            return [
+                Idea(
+                    id=row["id"],
+                    title=row["title"],
+                    category=row["category"],
+                )
+                for row in rows
+            ]
 
     def add(self, request: IdeaRequest) -> Idea:
-        with self._lock:
-            idea = Idea(id=self._next_id, title=request.title, category=request.category)
-            self._next_id += 1
-            self._ideas.append(idea)
-            return idea
+        title = request.title.strip()
+        category = request.category.strip()
+
+        if not title or not category:
+            raise HTTPException(
+                status_code=400,
+                detail="Title and category cannot be blank.",
+            )
+
+        with closing(connect()) as conn:
+            cursor = conn.execute(
+                "INSERT INTO ideas (title, category) VALUES (?, ?)",
+                (title, category),
+            )
+            conn.commit()
+
+            return Idea(
+                id=cursor.lastrowid,
+                title=title,
+                category=category,
+            )
