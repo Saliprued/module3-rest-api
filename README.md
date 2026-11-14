@@ -1,6 +1,6 @@
 # Campus Idea Board
 
-An application using react forntend connected to a REST API built with Python and FastAPI to view and submit campus ideas.
+A React and FastAPI application to view and add campus ideas. SQLite saves the ideas.
 
 ## Prerequisites
 
@@ -11,103 +11,27 @@ An application using react forntend connected to a REST API built with Python an
 - A browser and two separate terminals. VS Code (Optional code editor)
 - Postman for manual API testing.
 
-## Run the API with Docker
-Open a terminal in the project root (module3-rest-api), where Dockerfile and compose.yaml are located.
+## Run locally
 
-Stop any local API using port 8000 with Ctrl+C before starting the Docker API.
+Stop the Docker API first to free port 8000:
 
-## Host port
-The lesson uses host port 8080, but Docker could not bind to that port on my computer. This setup uses host port 8000 instead. The API still listens on port 8080 inside the container.
-
-The API service in compose.yaml uses this port mapping:
-```YAML
-ports:
-  - "127.0.0.1:8000:8080"
-```  
-The Dockerfile starts app.main:app because the FastAPI application is in app/main.py.
-
-## Build and start
-```Bash
-docker compose up -d --build       
-``` 
-This builds the application image and starts the container in the background. The first build may take several minutes.
-
-Check the service and its logs:
-```Bash
-docker compose ps
-docker compose logs api
-```
-
-To start an existing container again:
-```Bash
-docker compose start
-```
-## Stop
-Stop the container without removing it:
-```Bash
 docker compose stop
-```
-Stop and remove the project's containers and network:
-```Bash
-docker compose down
-```
-Run docker compose up -d --build again after changing the backend code.
 
-## Local URLs and connection
+From the project root, run these Windows PowerShell commands. Skip the first command if .venv already exists:
 
-| Service | URL |
-| --- | --- |
-| React frontend | http://localhost:5173 |
-| FastAPI backend | http://localhost:8000 |
-| FastAPI interactive API documentation | http://localhost:8000/docs |
-| Ideas endpoint | http://localhost:8000/api/ideas |
-
-Open the documentation URL to try the API directly.
-
-## Install and run React
-
-Docker runs the API. Start the React development server separately in another terminal:
-
-```sh or powershell
-cd frontend
-npm install
-npm run dev -- --port 5173 --strictPort
-```
-Open http://localhost:5173 to use the application. Keep this terminal running and press Ctrl+C to stop React. Install dependencies again only when they change.
-
-
-## Run FastAPI locally instead of Docker
-
-When you want to run the backend directly with Python. Stop the Docker API first with docker compose stop so port 8000 is available.
-From the project root, create a virtual environment and install dependencies. If .venv already exists, skip its creation.
-
-### Windows PowerShell
-
-```powershell
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --port 8000
-```
 
-These commands use the virtual environment directly, so activation is not required.
-If `.venv` already exists, skip its creation.
+In another terminal, start React:
 
-### macOS or Linux
+cd frontend
+npm install
+npm run dev -- --port 5173 --strictPort
 
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m uvicorn app.main:app --port 8000
-```
+Press Ctrl+C in each terminal to stop the servers.
 
 ## Frontend connection and CORS
-frontend/src/api.js uses this backend base URL:
-
-```js
-export const API_BASE_URL = "http://localhost:8000";
-```
-
-If the host port changes, update this value and the URLs used in the browser and Postman.
 
 The existing FastAPI application allows requests from the React origin through CORS:
 
@@ -124,11 +48,60 @@ app.add_middleware(
 
 Do not create a second FastAPI app. Restart the backend after changing its configuration.
 
+## Run with Docker
+Start or rebuild the API:
+
+docker compose up -d --build
+
+Check its status and logs:
+
+docker compose ps
+docker compose logs api
+
+Stop it:
+
+docker compose stop
+
+Remove the containers and network:
+
+docker compose down
+
+React runs separately using the commands above
+
+## SQLite database
+
+The database file is data/ideas.db locally and /app/data/ideas.db in Docker. Each stores its own data.
+
+The ideas table has three columns:
+
+|Column| Description|
+|id| ID created by SQLite|
+|title| Title, cannot be blank|
+|category|Category, cannot be blank|
+
+At startup, app/store.py uses app/schema.sql to create the table if needed. Existing ideas stay saved.
+
+GET /api/ideas reads ideas. POST /api/ideas checks and saves a new idea using SQL parameters, then returns its ID.
+
+## Local URLs and connection
+
+- React: http://localhost:5173
+- API: http://localhost:8000
+- API documentation: http://localhost:8000/docs
+
+Docker maps port 8000 on the computer to port 8080 inside the container:
+
+ports:
+  - "127.0.0.1:8000:8080"
+
+The browser still uses port 8000. If you change that host port, also update the backend URL in frontend/src/api.js.
+
+
 ## GET and POST
 
-- **GET `/api/hello`** returns a personalized greeting.
-- **GET `/api/ideas`** returns the list of ideas with status **200**.
-- **POST `/api/ideas`** creates an idea from a JSON body and returns it
+- **GET `/api/hello`** shows a greeting.
+- **GET `/api/ideas`** shows all ideas with status **200**.
+- **POST `/api/ideas`** adds an idea from a JSON body and returns it
   with a server-generated ID and status **201**.
 
 
@@ -141,50 +114,43 @@ Example POST body:
 }
 ```
 
-Example successful POST response (the actual id comes from the backend):
+The form checks the title before sending it. After saving, it shows the new idea and clears the form. If something fails, it shows an error.
 
-```json
-{
-  "id": 3,
-  "title": "Host a hackathon",
-  "category": "events"
-}
-```
+The backend must reject empty titles with 400 and add nothing.
 
-The form keeps the title and category in React state. It removes spaces from the beginning and end of both values. It does not send a title that is empty or contains only spaces.
+## Run tests
 
-The frontend checks the HTTP response to confirm the save worked. While saving, it shows “Saving…” and blocks another submission. After a successful save, it adds the idea to the board once, shows a success message, and clears the form.
-
-If saving fails, the app shows an error and keeps what you typed. If loading fails, it shows an error and a Retry button. Retry loads the ideas again without refreshing the page. Progress and success messages use a status area; errors use alerts.
-
-Required backend validation: direct POST requests with `title: ""` or `title: "   "` must return HTTP 400 and add no record. HTTP 422 does not meet that specific assignment requirement. This behavior needs verification against your existing backend.Its  Check the list before and after each invalid request to confirm it is unchanged.If the connection fails during saving, the idea might already be saved. Check the list before sending it again to avoid duplicates.
-
-
-## Backend tests
-
-Use a separate terminal, or stop the backend server first.
-
-Windows PowerShell:
-
-```powershell
+Backend tests, from the project root:
 .\.venv\Scripts\python.exe -m pytest -v
-```
 
-macOS or Linux:
+Frontend tests and build, from the frontend folder:
+node --test tests/validation.test.mjs
+npm run build
 
-```sh
-.venv/bin/python -m pytest -v
-```
+## Keep data in Docker
+This setting in compose.yaml stores the database in a named volume:
+volumes:
+  - ideas-data:/app/data
+The volume is declared at the bottom of the file:
+volumes:
+  ideas-data:
+
+## Check saved data
+Create an idea using POST /api/ideas. Use GET /api/ideas and note its ID, title, and category.
+
+Replace the container:
+docker compose down
+docker compose up -d
+Run GET again. The same idea should still appear.
+
+Do not use docker compose down -v if you want to keep the database. That command removes the volume.
 
 ## Frontend tests and production build
 
 Inside Working directory (frontend folder) Use another terminal 
 
 Windows PowerShell:
-
-```powershell
 .\.venv\Scripts\node --test tests/validation.test.mjs
-```
 
 and verify that:
 
@@ -207,3 +173,6 @@ A Docker container is an instance created from an image.  It executes my API in 
 ### 3. Why did my POST data disappear after replacing the container?
 
 My application stored the ideas in memory. POST requests changed the running application's list, but those changes stay in memory. so, the container was replaced, the application restarts and loads the original ideas again, deleting stored data in-memory. To keep new ideas, I would need persistent storage, such as a database.
+
+### 4. Why data survives now with SQLite
+Because at the first ideas were stored in memory, but with SQLite saves ideas in a database file. The Docker volume keeps that file when the container is replaced.
