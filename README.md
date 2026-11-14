@@ -4,17 +4,82 @@ An application using react forntend connected to a REST API built with Python an
 
 ## Prerequisites
 
-- Python 3.10 or later (the backend was developed using Python 3.14).
+- Docker Desktop installed and running, with Docker Compose available.
+- Python 3.10 or later. The local backend was developed using Python 3.14; the Docker image uses Python 3.12.
 - Node.js 20.19 or later with npm, as required by Vite version.
-- Internet access to install dependencies
+- Internet access to install dependencies and download Docker images.
 - A browser and two separate terminals. VS Code (Optional code editor)
 - Postman for manual API testing.
 
+## Run the API with Docker
+Open a terminal in the project root (module3-rest-api), where Dockerfile and compose.yaml are located.
 
-## Terminal 1: install and run FastAPI
+Stop any local API using port 8000 with Ctrl+C before starting the Docker API.
 
-Open the project root in VS Code and select Terminal > New Terminal.
-Make sure this terminal is in the backend working directory described above.
+## Host port
+The lesson uses host port 8080, but Docker could not bind to that port on my computer. This setup uses host port 8000 instead. The API still listens on port 8080 inside the container.
+
+The API service in compose.yaml uses this port mapping:
+```YAML
+ports:
+  - "127.0.0.1:8000:8080"
+```  
+The Dockerfile starts app.main:app because the FastAPI application is in app/main.py.
+
+## Build and start
+```Bash
+docker compose up -d --build       
+``` 
+This builds the application image and starts the container in the background. The first build may take several minutes.
+
+Check the service and its logs:
+```Bash
+docker compose ps
+docker compose logs api
+```
+
+To start an existing container again:
+```Bash
+docker compose start
+```
+## Stop
+Stop the container without removing it:
+```Bash
+docker compose stop
+```
+Stop and remove the project's containers and network:
+```Bash
+docker compose down
+```
+Run docker compose up -d --build again after changing the backend code.
+
+## Local URLs and connection
+
+| Service | URL |
+| --- | --- |
+| React frontend | http://localhost:5173 |
+| FastAPI backend | http://localhost:8000 |
+| FastAPI interactive API documentation | http://localhost:8000/docs |
+| Ideas endpoint | http://localhost:8000/api/ideas |
+
+Open the documentation URL to try the API directly.
+
+## Install and run React
+
+Docker runs the API. Start the React development server separately in another terminal:
+
+```sh or powershell
+cd frontend
+npm install
+npm run dev -- --port 5173 --strictPort
+```
+Open http://localhost:5173 to use the application. Keep this terminal running and press Ctrl+C to stop React. Install dependencies again only when they change.
+
+
+## Run FastAPI locally instead of Docker
+
+When you want to run the backend directly with Python. Stop the Docker API first with docker compose stop so port 8000 is available.
+From the project root, create a virtual environment and install dependencies. If .venv already exists, skip its creation.
 
 ### Windows PowerShell
 
@@ -35,44 +100,16 @@ python3 -m venv .venv
 .venv/bin/python -m uvicorn app.main:app --port 8000
 ```
 
-
-Keep this terminal running while using the frontend.
-
-## Terminal 2: install and run React
-
-Open another terminal at the same project root, then enter the frontend folder:
-
-```sh or powershell
-cd frontend
-npm install
-npm run dev -- --port 5173 --strictPort
-```
-
-Keep both terminals running. Press Ctrl+C in each terminal to stop its server.
-On later runs, dependency installation is only needed if dependencies change; run the server command in each working directory.
-
-## Local URLs and connection
-
-| Service | URL |
-| --- | --- |
-| React frontend | http://localhost:5173 |
-| FastAPI backend | http://localhost:8000 |
-| FastAPI interactive API documentation | http://localhost:8000/docs |
-| Ideas endpoint | http://localhost:8000/api/ideas |
-
-Open the React URL to use the application. Open the documentation URL to try the API directly.
-Use `localhost` consistently: `127.0.0.1` is a different origin for CORS.
-
-`frontend/src/api.js` uses this backend base URL:
+## Frontend connection and CORS
+frontend/src/api.js uses this backend base URL:
 
 ```js
 export const API_BASE_URL = "http://localhost:8000";
 ```
 
-If the backend runs on a different port, update that value.
-The existing FastAPI app must allow requests from the frontend origin through CORS.
+If the host port changes, update this value and the URLs used in the browser and Postman.
 
-add CORSMiddleware to your existing FastAPI app this way:
+The existing FastAPI application allows requests from the React origin through CORS:
 
 ```main.py
 from fastapi.middleware.cors import CORSMiddleware
@@ -156,3 +193,17 @@ and verify that:
 3. A spaces-only string is rejected.
 
 `npm run build` creates the production frontend in `frontend/dist/`. 
+
+## Docker reflection
+
+### 1. What is a Docker image?
+
+A Docker image is a packaged template containing my application, and its dependencies, with the instructions needed to start the API. Docker builds it from the Dockerfile.
+
+### 2. What is a Docker container?
+
+A Docker container is an instance created from an image.  It executes my API in an isolated environment and makes it available through the configured port for it.
+
+### 3. Why did my POST data disappear after replacing the container?
+
+My application stored the ideas in memory. POST requests changed the running application's list, but those changes stay in memory. so, the container was replaced, the application restarts and loads the original ideas again, deleting stored data in-memory. To keep new ideas, I would need persistent storage, such as a database.
